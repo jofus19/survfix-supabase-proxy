@@ -13,9 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Base IP and Host configuration
-const BASE_URL = "http://163.181.81.231";
-const HOST_HEADER = "survfix.com";
+const BASE_URL = "https://survfix.com";
 const ROVER_ID = "RVR-12345";
 
 let sessionCookie = '';
@@ -28,7 +26,6 @@ async function performLogin() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Host': HOST_HEADER,
         'X-Device-Identifier': ROVER_ID,
         'Accept': 'application/json'
       }
@@ -40,11 +37,10 @@ async function performLogin() {
 
     const setCookieHeader = response.headers.get('set-cookie');
     if (setCookieHeader) {
-      // Extract the cookie properly
       sessionCookie = setCookieHeader.split(';')[0];
       console.log("Session cookie acquired:", sessionCookie);
     } else {
-      console.warn("No cookie returned in login response, proceeding anyway...");
+      console.warn("No cookie returned in login response, proceeding...");
     }
 
     const data = await response.json();
@@ -56,7 +52,6 @@ async function performLogin() {
 
 // Step 2: Fetch Telemetry and Save to Supabase
 async function fetchAndSaveData() {
-  // If no session cookie yet, try logging in
   if (!sessionCookie) {
     await performLogin();
   }
@@ -69,7 +64,6 @@ async function fetchAndSaveData() {
     const headers = { 
       'Accept': 'application/json',
       'User-Agent': 'okhttp/4.9.3',
-      'Host': HOST_HEADER,
       'X-Requested-With': 'XMLHttpRequest'
     };
 
@@ -82,7 +76,6 @@ async function fetchAndSaveData() {
       headers: headers
     });
 
-    // If unauthorized or expired, try re-authenticating
     if (response.status === 401 || response.status === 403) {
       console.warn("Session expired or unauthorized. Re-logging in...");
       await performLogin();
@@ -120,7 +113,6 @@ async function fetchAndSaveData() {
 // Run the fetch loop every 10 seconds
 const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
-// Initial run immediately on startup
 setTimeout(fetchAndSaveData, 1000);
 
 // Minimal HTTP server so Render considers this a healthy Web Service
