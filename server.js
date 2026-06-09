@@ -13,7 +13,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const SURVFIX_API = "http://163.181.81.231/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+const SURVFIX_API = "http://163.181.81.231/stream?rover_id=RVR-12345&interval=5000";
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
