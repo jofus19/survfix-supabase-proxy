@@ -12,16 +12,15 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration for Survfix API stream (Blueprint Endpoint 2)
-// Note: The stream operates on a read-only telemetry channel (GET)
+// Configuration for Survfix API stream
 const SURVFIX_API = "https://survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
-const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with a valid active token 
+const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with the token intercepted from the app
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
   
   if (BEARER_TOKEN === "YOUR_ACTUAL_BEARER_TOKEN_HERE") {
-    console.error("[-] Please replace BEARER_TOKEN with an active token from a surveyor login session.");
+    console.error("[-] Please replace BEARER_TOKEN with an active token from your app login session.");
     return;
   }
 
@@ -41,21 +40,18 @@ async function fetchAndSaveData() {
     const data = await response.json();
     console.log("Data received:", data);
 
-    // Mapping the JSON structure directly from the blueprint schema
+    // Mapping exactly to the 3 columns present in your Supabase 'rovers' table
     const roverRecord = {
-      rover_id: data.rover_id,
-      surveyor_name: 'Unknown', // Surveyor username is returned on login, not the stream
-      status: data.status,
-      latitude: data.latitude || 0.0,     // Root level from blueprint
-      longitude: data.longitude || 0.0,   // Root level from blueprint
-      battery_level: data.telemetry?.battery_level || 0, // Nested inside telemetry
-      updated_at: new Date().toISOString()
+      rover_name: data.rover_id || 'Unknown', 
+      status: data.status || 'Inactive',
+      surveyor_name: 'Unknown' // Placeholder until token/login details are integrated
     };
 
     // Insert or update data into the Supabase table named 'rovers'
+    // Note: 'rover_name' is the primary key/conflict target based on your schema
     const { error } = await supabase
       .from('rovers')
-      .upsert(roverRecord, { onConflict: 'rover_id' });
+      .upsert(roverRecord, { onConflict: 'rover_name' });
 
     if (error) {
       console.error("Error saving to Supabase:", error.message);
