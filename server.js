@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 
 // Load environment variables from Render
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY; // Use the publishable key/anon key
+const SUPABASE_KEY = process.env.SUPABASE_KEY; // Publishable key/anon key
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Missing Supabase environment variables!");
@@ -12,17 +12,24 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration for Survfix API
+// Configuration for Survfix API stream (Blueprint Endpoint 2)
+// Note: The stream operates on a read-only telemetry channel (GET)
 const SURVFIX_API = "https://survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
-const BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // Replace with a valid token from your blueprint/testing
+const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with a valid active token 
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
+  
+  if (BEARER_TOKEN === "YOUR_ACTUAL_BEARER_TOKEN_HERE") {
+    console.error("[-] Please replace BEARER_TOKEN with an active token from a surveyor login session.");
+    return;
+  }
+
   try {
     const response = await fetch(SURVFIX_API, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${ BEARER_TOKEN }`,
+        'Authorization': `Bearer ${BEARER_TOKEN}`,
         'Accept': 'application/json'
       }
     });
@@ -34,14 +41,14 @@ async function fetchAndSaveData() {
     const data = await response.json();
     console.log("Data received:", data);
 
-    // Map the JSON structure from your blueprint to your Supabase table columns
+    // Mapping the JSON structure directly from the blueprint schema
     const roverRecord = {
       rover_id: data.rover_id,
-      surveyor_name: data.data?.username || 'Unknown', // Adjust based on full JSON response
+      surveyor_name: 'Unknown', // Surveyor username is returned on login, not the stream
       status: data.status,
-      latitude: data.coordinates?.latitude || 0.0,
-      longitude: data.coordinates?.longitude || 0.0,
-      battery_level: data.telemetry?.battery_level || 0,
+      latitude: data.latitude || 0.0,     // Root level from blueprint
+      longitude: data.longitude || 0.0,   // Root level from blueprint
+      battery_level: data.telemetry?.battery_level || 0, // Nested inside telemetry
       updated_at: new Date().toISOString()
     };
 
