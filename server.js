@@ -12,16 +12,20 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Direct IP endpoint, no authentication/token required
 const SURVFIX_API = "http://163.181.81.231/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
 
   try {
+    // Added User-Agent to simulate the Android APK client and avoid 403 Forbidden
     const response = await fetch(SURVFIX_API, {
       method: 'GET',
-      headers: { 'Accept': 'application/json' }
+      headers: { 
+        'Accept': 'application/json',
+        'User-Agent': 'okhttp/4.9.3',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
     });
 
     if (!response.ok) {
@@ -52,12 +56,12 @@ async function fetchAndSaveData() {
   }
 }
 
-// Polling loop every 10 seconds
+// Run polling loop every 10 seconds
 const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
 fetchAndSaveData();
 
-// Bind strictly to Render's required port to avoid timeouts
+// Bind strictly to Render's required port
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
