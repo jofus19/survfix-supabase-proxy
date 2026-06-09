@@ -12,8 +12,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration for Survfix API stream
-const SURVFIX_API = "https://survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+// Configuration for Survfix API stream (Updated to correct domain and protocol)
+const SURVFIX_API = "http://code.survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
 const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with the token intercepted from the app
 
 async function fetchAndSaveData() {
@@ -48,7 +48,6 @@ async function fetchAndSaveData() {
     };
 
     // Insert or update data into the Supabase table named 'rovers'
-    // Note: 'rover_name' is the primary key/conflict target based on your schema
     const { error } = await supabase
       .from('rovers')
       .upsert(roverRecord, { onConflict: 'rover_name' });
