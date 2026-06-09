@@ -1,10 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
-const http = require('http');
 
 // Load environment variables from Render
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const SUPABASE_KEY = process.env.SUPABASE_KEY; // Publishable key/anon key
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Missing Supabase environment variables!");
@@ -13,78 +12,26 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Use direct IP and specify the domain in the Host header
-const BASE_URL = "http://163.181.81.231";
-const HOST_HEADER = "survfix.com";
-const ROVER_ID = "RVR-12345";
+// Configuration for Survfix API stream (Updated to support port 13434)
+const SURVFIX_API = "http://support.survfix.com:13434/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with the token intercepted from the app
 
-let sessionCookie = '';
+async function fetchAndSaveData() {
+  console.log("Fetching telemetry data from Survfix...");
+  
+  if (BEARER_TOKEN === "YOUR_ACTUAL_BEARER_TOKEN_HERE") {
+    console.error("[-] Please replace BEARER_TOKEN with an active token from your app login session.");
+    return;
+  }
 
-// Step 1: Handshake / Login to get the session
-async function performLogin() {
-  console.log("Performing Rover Login handshake...");
   try {
-    const response = await fetch(`${BASE_URL}/api/v1/auth/rover-login`, {
-      method: 'POST',
+    const response = await fetch(SURVFIX_API, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'Host': HOST_HEADER,
-        'X-Device-Identifier': ROVER_ID,
+        'Authorization': `Bearer ${BEARER_TOKEN}`,
         'Accept': 'application/json'
       }
     });
-
-    if (!response.ok) {
-      throw new Error(`Login failed with status: ${response.statusText}`);
-    }
-
-    const setCookieHeader = response.headers.get('set-cookie');
-    if (setCookieHeader) {
-      sessionCookie = setCookieHeader.split(';')[0];
-      console.log("Session cookie acquired:", sessionCookie);
-    } else {
-      console.warn("No cookie returned in login response, proceeding...");
-    }
-
-    const data = await response.json();
-    console.log("Login successful, profile data:", data);
-  } catch (error) {
-    console.error("Error during login handshake:", error.message);
-  }
-}
-
-// Step 2: Fetch Telemetry and Save to Supabase
-async function fetchAndSaveData() {
-  if (!sessionCookie) {
-    await performLogin();
-  }
-
-  console.log("Fetching telemetry data from Survfix...");
-
-  try {
-    const streamUrl = `${BASE_URL}/api/v1/tracking/stream?rover_id=${ROVER_ID}&interval=5000`;
-    
-    const headers = { 
-      'Accept': 'application/json',
-      'User-Agent': 'okhttp/4.9.3',
-      'Host': HOST_HEADER,
-      'X-Requested-With': 'XMLHttpRequest'
-    };
-
-    if (sessionCookie) {
-      headers['Cookie'] = sessionCookie;
-    }
-
-    const response = await fetch(streamUrl, {
-      method: 'GET',
-      headers: headers
-    });
-
-    if (response.status === 401 || response.status === 403) {
-      console.warn("Session expired or unauthorized. Re-logging in...");
-      await performLogin();
-      return;
-    }
 
     if (!response.ok) {
       throw new Error(`Survfix API error: ${response.statusText}`);
@@ -93,12 +40,14 @@ async function fetchAndSaveData() {
     const data = await response.json();
     console.log("Data received:", data);
 
+    // Mapping exactly to the 3 columns present in your Supabase 'rovers' table
     const roverRecord = {
-      rover_name: data.rover_id || ROVER_ID, 
-      status: data.status || 'Active',
-      surveyor_name: 'Unknown'
+      rover_name: data.rover_id || 'Unknown', 
+      status: data.status || 'Inactive',
+      surveyor_name: 'Unknown' // Placeholder until token/login details are integrated
     };
 
+    // Insert or update data into the Supabase table named 'rovers'
     const { error } = await supabase
       .from('rovers')
       .upsert(roverRecord, { onConflict: 'rover_name' });
@@ -114,18 +63,11 @@ async function fetchAndSaveData() {
   }
 }
 
-// Run the fetch loop every 10 seconds
+// Run the fetch loop every 10 seconds (10000 ms)
 const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
-setTimeout(fetchAndSaveData, 1000);
 
-// Minimal HTTP server so Render considers this a healthy Web Service
-const PORT = process.env.PORT || 10000;
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Survfix Supabase Proxy is running and active.\n');
-}).listen(PORT, () => {
-  console.log(`Web server listening on port ${PORT}`);
-});
+// Run immediately on start
+fetchAndSaveData();
 
 console.log("Survfix Supabase Proxy background worker started.");
