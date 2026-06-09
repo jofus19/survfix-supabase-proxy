@@ -1,46 +1,71 @@
-const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
-const app = express();
 
-app.use(express.json());
+// Load environment variables from Render
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY; // Use the publishable key/anon key
 
-const SUPABASE_URL = "https://bcwhvynkwghcbjjxtvlw.supabase.co/rest/v1";
-const SUPABASE_KEY = "YOUR_SUPABASE_ANON_KEY"; // Make sure to paste your JWT key here!
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("Missing Supabase environment variables!");
+  process.exit(1);
+}
 
-app.post('/api/v1/tracking/stream', async (req, res) => {
-    try {
-        const payload = req.body;
-        console.log("Received payload from rover:", payload.rover_id);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // Forward data to Supabase 'rovers' table (adjust table/columns as needed)
-        const response = await fetch(`${SUPABASE_URL}/rovers?id=eq.${payload.rover_id}`, {
-            method: 'PATCH',
-            headers: {
-                'Content-Type': 'application/json',
-                'apikey': SUPABASE_KEY,
-                'Authorization': `Bearer ${SUPABASE_KEY}`, // <-- FIXED: Added $ and curly braces
-                'Prefer': 'return=minimal'
-            },
-            body: JSON.stringify({
-                latitude: payload.latitude,
-                longitude: payload.longitude,
-                battery_level: payload.battery_level,
-                status: "Active"
-            })
-        });
+// Configuration for Survfix API
+const SURVFIX_API = "https://survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+const BEARER_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."; // Replace with a valid token from your blueprint/testing
 
-        if (response.ok) {
-            res.status(200).send({ status: "Synced" });
-        } else {
-            const errText = await response.text();
-            console.error("Supabase reject:", errText);
-            res.status(500).send("Sync error");
-        }
-    } catch (e) {
-        console.error("Proxy error:", e);
-        res.status(500).send("Server error");
+async function fetchAndSaveData() {
+  console.log("Fetching telemetry data from Survfix...");
+  try {
+    const response = await fetch(SURVFIX_API, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${ BEARER_TOKEN }`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Survfix API error: ${response.statusText}`);
     }
-});
 
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`Proxy active on port ${PORT}`));
+    const data = await response.json();
+    console.log("Data received:", data);
+
+    // Map the JSON structure from your blueprint to your Supabase table columns
+    const roverRecord = {
+      rover_id: data.rover_id,
+      surveyor_name: data.data?.username || 'Unknown', // Adjust based on full JSON response
+      status: data.status,
+      latitude: data.coordinates?.latitude || 0.0,
+      longitude: data.coordinates?.longitude || 0.0,
+      battery_level: data.telemetry?.battery_level || 0,
+      updated_at: new Date().toISOString()
+    };
+
+    // Insert or update data into the Supabase table named 'rovers'
+    const { error } = await supabase
+      .from('rovers')
+      .upsert(roverRecord, { onConflict: 'rover_id' });
+
+    if (error) {
+      console.error("Error saving to Supabase:", error.message);
+    } else {
+      console.log("Rover data successfully saved to Supabase!");
+    }
+
+  } catch (error) {
+    console.error("Error in fetch loop:", error.message);
+  }
+}
+
+// Run the fetch loop every 10 seconds (10000 ms)
+const POLLING_INTERVAL = 10000;
+setInterval(fetchAndSaveData, POLLING_INTERVAL);
+
+// Run immediately on start
+fetchAndSaveData();
+
+console.log("Survfix Supabase Proxy background worker started.");
