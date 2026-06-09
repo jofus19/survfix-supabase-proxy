@@ -1,5 +1,5 @@
 const { createClient } = require('@supabase/supabase-js');
-const fetch = require('node-fetch');
+const net = require('net');
 
 // Load environment variables from Render
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -12,33 +12,24 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration for Survfix stream (Port 13434)
-// Removed Authorization headers assuming it's an open telemetry stream
-const SURVFIX_API = "http://support.survfix.com:13434/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+const HOST = 'support.survfix.com';
+const PORT = 13434;
 
-async function fetchAndSaveData() {
-  console.log("Fetching telemetry data from Survfix...");
+function connectToStream() {
+  const client = new net.Socket();
 
-  try {
-    const response = await fetch(SURVFIX_API, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/plain, application/json'
-      }
-    });
+  console.log(`Connecting to raw stream at ${HOST}:${PORT}...`);
 
-    if (!response.ok) {
-      throw new Error(`Survfix API error: ${response.statusText}`);
-    }
+  client.connect(PORT, HOST, () => {
+    console.log('Connected to Survfix TCP stream successfully!');
+  });
 
-    // Read response as plain text
-    const textData = await response.text();
-    console.log("Raw text received:\n", textData);
+  client.on('data', async (data) => {
+    const textData = data.toString('utf8');
+    console.log("Received data chunk:\n", textData);
 
-    // Default fallback rover name
+    // Parse the Job Name/Rover ID from the JB line
     let roverName = 'RVR-12345';
-    
-    // Attempt to extract job name / rover ID from the stream text
     const match = textData.match(/JB,NM([^,\r\n]+)/);
     if (match && match[1]) {
       roverName = match[1].trim();
@@ -60,17 +51,21 @@ async function fetchAndSaveData() {
     } else {
       console.log("Rover data successfully saved to Supabase!");
     }
+  });
 
-  } catch (error) {
-    console.error("Error in fetch loop:", error.message);
-  }
+  client.on('close', () => {
+    console.log('Stream connection closed. Reconnecting in 10 seconds...');
+    // Auto-reconnect if the stream drops
+    setTimeout(connectToStream, 10000);
+  });
+
+  client.on('error', (err) => {
+    console.error('Stream socket error:', err.message);
+    client.destroy();
+  });
 }
 
-// Run the fetch loop every 10 seconds (10000 ms)
-const POLLING_INTERVAL = 10000;
-setInterval(fetchAndSaveData, POLLING_INTERVAL);
+// Start the stream listener
+connectToStream();
 
-// Run immediately on start
-fetchAndSaveData();
-
-console.log("Survfix Supabase Proxy background worker started.");
+console.log("Survfix TCP Supabase Proxy started.");
