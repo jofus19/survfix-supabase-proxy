@@ -13,21 +13,81 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const SURVFIX_API = "http://163.181.81.231/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+// Base IP and Host configuration
+const BASE_URL = "http://163.181.81.231";
+const HOST_HEADER = "survfix.com";
+const ROVER_ID = "RVR-12345";
 
+let sessionCookie = '';
+
+// Step 1: Handshake / Login to get the session
+async function performLogin() {
+  console.log("Performing Rover Login handshake...");
+  try {
+    const response = await fetch(`${BASE_URL}/api/v1/auth/rover-login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Host': HOST_HEADER,
+        'X-Device-Identifier': ROVER_ID,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Login failed with status: ${response.statusText}`);
+    }
+
+    const setCookieHeader = response.headers.get('set-cookie');
+    if (setCookieHeader) {
+      // Extract the cookie properly
+      sessionCookie = setCookieHeader.split(';')[0];
+      console.log("Session cookie acquired:", sessionCookie);
+    } else {
+      console.warn("No cookie returned in login response, proceeding anyway...");
+    }
+
+    const data = await response.json();
+    console.log("Login successful, profile data:", data);
+  } catch (error) {
+    console.error("Error during login handshake:", error.message);
+  }
+}
+
+// Step 2: Fetch Telemetry and Save to Supabase
 async function fetchAndSaveData() {
+  // If no session cookie yet, try logging in
+  if (!sessionCookie) {
+    await performLogin();
+  }
+
   console.log("Fetching telemetry data from Survfix...");
 
   try {
-    const response = await fetch(SURVFIX_API, {
+    const streamUrl = `${BASE_URL}/api/v1/tracking/stream?rover_id=${ROVER_ID}&interval=5000`;
+    
+    const headers = { 
+      'Accept': 'application/json',
+      'User-Agent': 'okhttp/4.9.3',
+      'Host': HOST_HEADER,
+      'X-Requested-With': 'XMLHttpRequest'
+    };
+
+    if (sessionCookie) {
+      headers['Cookie'] = sessionCookie;
+    }
+
+    const response = await fetch(streamUrl, {
       method: 'GET',
-      headers: { 
-        'Accept': 'application/json',
-        'User-Agent': 'okhttp/4.9.3',
-        'Host': 'code.survfix.com',
-        'X-Requested-With': 'XMLHttpRequest'
-      }
+      headers: headers
     });
+
+    // If unauthorized or expired, try re-authenticating
+    if (response.status === 401 || response.status === 403) {
+      console.warn("Session expired or unauthorized. Re-logging in...");
+      await performLogin();
+      return;
+    }
 
     if (!response.ok) {
       throw new Error(`Survfix API error: ${response.statusText}`);
@@ -37,8 +97,8 @@ async function fetchAndSaveData() {
     console.log("Data received:", data);
 
     const roverRecord = {
-      rover_name: data.rover_id || 'Unknown', 
-      status: data.status || 'Inactive',
+      rover_name: data.rover_id || ROVER_ID, 
+      status: data.status || 'Active',
       surveyor_name: 'Unknown'
     };
 
@@ -60,7 +120,8 @@ async function fetchAndSaveData() {
 // Run the fetch loop every 10 seconds
 const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
-fetchAndSaveData();
+// Initial run immediately on startup
+setTimeout(fetchAndSaveData, 1000);
 
 // Minimal HTTP server so Render considers this a healthy Web Service
 const PORT = process.env.PORT || 10000;
