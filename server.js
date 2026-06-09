@@ -2,6 +2,7 @@ const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
 const http = require('http');
 
+// Load environment variables from Render
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -18,12 +19,12 @@ async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
 
   try {
-    // Added User-Agent to simulate the Android APK client and avoid 403 Forbidden
     const response = await fetch(SURVFIX_API, {
       method: 'GET',
       headers: { 
         'Accept': 'application/json',
         'User-Agent': 'okhttp/4.9.3',
+        'Host': 'code.survfix.com',
         'X-Requested-With': 'XMLHttpRequest'
       }
     });
@@ -56,16 +57,16 @@ async function fetchAndSaveData() {
   }
 }
 
-// Run polling loop every 10 seconds
+// Run the fetch loop every 10 seconds
 const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
 fetchAndSaveData();
 
-// Bind strictly to Render's required port
+// Minimal HTTP server so Render considers this a healthy Web Service
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Survfix Supabase Proxy background worker active.');
+  res.end('Survfix Supabase Proxy is running and active.\n');
 }).listen(PORT, () => {
   console.log(`Web server listening on port ${PORT}`);
 });
