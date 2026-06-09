@@ -3,7 +3,7 @@ const fetch = require('node-fetch');
 
 // Load environment variables from Render
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_KEY; // Publishable key/anon key
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   console.error("Missing Supabase environment variables!");
@@ -12,24 +12,18 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration for Survfix API stream (Updated to support port 13434)
+// Configuration for Survfix stream (Port 13434)
+// Removed Authorization headers assuming it's an open telemetry stream
 const SURVFIX_API = "http://support.survfix.com:13434/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
-const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with the token intercepted from the app
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
-  
-  if (BEARER_TOKEN === "YOUR_ACTUAL_BEARER_TOKEN_HERE") {
-    console.error("[-] Please replace BEARER_TOKEN with an active token from your app login session.");
-    return;
-  }
 
   try {
     const response = await fetch(SURVFIX_API, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`,
-        'Accept': 'application/json'
+        'Accept': 'text/plain, application/json'
       }
     });
 
@@ -37,17 +31,26 @@ async function fetchAndSaveData() {
       throw new Error(`Survfix API error: ${response.statusText}`);
     }
 
-    const data = await response.json();
-    console.log("Data received:", data);
+    // Read response as plain text
+    const textData = await response.text();
+    console.log("Raw text received:\n", textData);
 
-    // Mapping exactly to the 3 columns present in your Supabase 'rovers' table
+    // Default fallback rover name
+    let roverName = 'RVR-12345';
+    
+    // Attempt to extract job name / rover ID from the stream text
+    const match = textData.match(/JB,NM([^,\r\n]+)/);
+    if (match && match[1]) {
+      roverName = match[1].trim();
+    }
+
     const roverRecord = {
-      rover_name: data.rover_id || 'Unknown', 
-      status: data.status || 'Inactive',
-      surveyor_name: 'Unknown' // Placeholder until token/login details are integrated
+      rover_name: roverName, 
+      status: 'Active',
+      surveyor_name: 'Unknown'
     };
 
-    // Insert or update data into the Supabase table named 'rovers'
+    // Insert or update data into the Supabase 'rovers' table
     const { error } = await supabase
       .from('rovers')
       .upsert(roverRecord, { onConflict: 'rover_name' });
