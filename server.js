@@ -13,7 +13,8 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const SURVFIX_API = "http://code.survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
+// Updated endpoint to use the main survfix.com domain
+const SURVFIX_API = "https://survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
@@ -57,7 +58,7 @@ const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
 fetchAndSaveData();
 
-// --- ADDED: Minimal HTTP server so Render considers this a healthy Web Service ---
+// Minimal HTTP server so Render considers this a healthy Web Service
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
