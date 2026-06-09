@@ -13,7 +13,9 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const BASE_URL = "https://survfix.com";
+// Use direct IP and specify the domain in the Host header
+const BASE_URL = "http://163.181.81.231";
+const HOST_HEADER = "survfix.com";
 const ROVER_ID = "RVR-12345";
 
 let sessionCookie = '';
@@ -26,6 +28,7 @@ async function performLogin() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Host': HOST_HEADER,
         'X-Device-Identifier': ROVER_ID,
         'Accept': 'application/json'
       }
@@ -64,6 +67,7 @@ async function fetchAndSaveData() {
     const headers = { 
       'Accept': 'application/json',
       'User-Agent': 'okhttp/4.9.3',
+      'Host': HOST_HEADER,
       'X-Requested-With': 'XMLHttpRequest'
     };
 
