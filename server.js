@@ -2,7 +2,6 @@ const { createClient } = require('@supabase/supabase-js');
 const fetch = require('node-fetch');
 const http = require('http');
 
-// Load environment variables from Render
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 
@@ -13,7 +12,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Updated endpoint to use the main survfix.com domain
+// Direct IP endpoint, no authentication/token required
 const SURVFIX_API = "http://163.181.81.231/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
 
 async function fetchAndSaveData() {
@@ -53,16 +52,16 @@ async function fetchAndSaveData() {
   }
 }
 
-// Run the fetch loop every 10 seconds
+// Polling loop every 10 seconds
 const POLLING_INTERVAL = 10000;
 setInterval(fetchAndSaveData, POLLING_INTERVAL);
 fetchAndSaveData();
 
-// Minimal HTTP server so Render considers this a healthy Web Service
+// Bind strictly to Render's required port to avoid timeouts
 const PORT = process.env.PORT || 10000;
 http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Survfix Supabase Proxy is running and active.\n');
+  res.end('Survfix Supabase Proxy background worker active.');
 }).listen(PORT, () => {
   console.log(`Web server listening on port ${PORT}`);
 });
