@@ -12,23 +12,17 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Configuration for Survfix API stream (Updated to correct domain and protocol)
+// Configuration for Survfix API stream (Pointing directly to the open HTTP endpoint)
 const SURVFIX_API = "http://code.survfix.com/api/v1/tracking/stream?rover_id=RVR-12345&interval=5000";
-const BEARER_TOKEN = "YOUR_ACTUAL_BEARER_TOKEN_HERE"; // Replace with the token intercepted from the app
 
 async function fetchAndSaveData() {
   console.log("Fetching telemetry data from Survfix...");
-  
-  if (BEARER_TOKEN === "YOUR_ACTUAL_BEARER_TOKEN_HERE") {
-    console.error("[-] Please replace BEARER_TOKEN with an active token from your app login session.");
-    return;
-  }
 
   try {
+    // No Authorization header needed since access is open
     const response = await fetch(SURVFIX_API, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${BEARER_TOKEN}`,
         'Accept': 'application/json'
       }
     });
@@ -44,7 +38,7 @@ async function fetchAndSaveData() {
     const roverRecord = {
       rover_name: data.rover_id || 'Unknown', 
       status: data.status || 'Inactive',
-      surveyor_name: 'Unknown' // Placeholder until token/login details are integrated
+      surveyor_name: 'Unknown' // Can be updated later if provided in the JSON payload
     };
 
     // Insert or update data into the Supabase table named 'rovers'
